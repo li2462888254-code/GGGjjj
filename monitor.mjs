@@ -27,16 +27,21 @@ async function fetchJson(url) {
 
 async function marketData() {
   const rows = await Promise.all(funds.map(async (fund) => {
-    const secid = `${fund.market}.${fund.code}`;
-    const quoteUrl = `https://push2.eastmoney.com/api/qt/stock/get?secid=${secid}&fields=f43,f57,f58,f60,f170,f47,f48`;
-    const historyUrl = `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${secid}&klt=101&fqt=1&lmt=35&end=20500101&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58`;
-    const [quoteResult, historyResult] = await Promise.all([fetchJson(quoteUrl), fetchJson(historyUrl)]);
-    const quote = quoteResult.data;
-    const history = historyResult.data?.klines || [];
-    if (!quote || !history.length) throw new Error(`No quote data for ${fund.code}`);
-    return { ...fund, name: quote.f58 || fund.name, price: quote.f43 / 1000, changePercent: quote.f170 / 100, history: history.map((line) => { const [date, open, close, high, low] = line.split(','); return { date, close: Number(close), open: Number(open), high: Number(high), low: Number(low) }; }) };
+    const symbol = `${fund.market ? 'sh' : 'sz'}${fund.code}`;
+    const quoteText = String(await fetchText(`https://qt.gtimg.cn/q=${symbol}`));
+    const quoted = quoteText.slice(quoteText.indexOf('"') + 1, quoteText.lastIndexOf('"')).split('~');
+    const historyResult = await fetchJson(`https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${symbol},day,,,60,qfq`);
+    const history = historyResult.data?.[symbol]?.qfqday || historyResult.data?.[symbol]?.day || [];
+    if (!quoted.length || !history.length) throw new Error(`No quote data for ${fund.code}`);
+    return { ...fund, name: fund.name, price: Number(quoted[3]), changePercent: Number(quoted[32]), history: history.map((line) => { const [date, open, close, high, low] = line; return { date, close: Number(close), open: Number(open), high: Number(high), low: Number(low) }; }) };
   }));
   return { rows, updatedAt: new Date().toISOString() };
+}
+
+async function fetchText(url) {
+  const response = await fetch(url, { headers: { 'User-Agent': 'GoldFundMonitor/1.0' }, signal: AbortSignal.timeout(15000) });
+  if (!response.ok) throw new Error(`HTTP ${response.status} from ${url}`);
+  return response.text();
 }
 
 function risk(row) {

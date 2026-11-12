@@ -2,7 +2,8 @@ import crypto from 'node:crypto';
 
 const pushplusToken = process.env.PUSHPLUS_TOKEN || '';
 const pushplusTopic = process.env.PUSHPLUS_TOPIC || '';
-const runningInActions = process.env.GITHUB_ACTIONS === 'true';\nconst dryRun = process.argv.includes('--dry-run') || !pushplusToken;
+const runningInActions = process.env.GITHUB_ACTIONS === 'true';
+const dryRun = process.argv.includes('--dry-run') || !pushplusToken;
 
 const funds = [
   { code: '511880', market: 1, name: '银华日利ETF', category: '现金类', riskBand: 1 },
@@ -105,7 +106,13 @@ function formatAdvice(advice) {
 }
 
 async function push(content) {
-  if (dryRun) {\n    if (runningInActions && !pushplusToken) {\n      throw new Error('PUSHPLUS_TOKEN is missing in GitHub Actions; refusing to report a false-success dry run.');\n    }\n    console.log(content.replace(/<[^>]+>/g, ' '));\n    return;\n  }
+  if (dryRun) {
+    if (runningInActions && !pushplusToken) {
+      throw new Error('PUSHPLUS_TOKEN is missing in GitHub Actions; refusing to report a false-success dry run.');
+    }
+    console.log(content.replace(/<[^>]+>/g, ' '));
+    return;
+  }
   const response = await request('https://www.pushplus.plus/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: pushplusToken, title: '50????????', content, template: 'html', topic: pushplusTopic || undefined }) });
   const result = await response.json();
   if (result.code !== 200) throw new Error(`PushPlus rejected: ${JSON.stringify(result)}`);
